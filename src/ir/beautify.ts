@@ -22,7 +22,7 @@ import { toPascalCase, NameRegistry } from "../util/names.js";
  * must survive untouched.
  */
 const GENERIC_NAME =
-  /^(div|el|span|p|a|ul|ol|li|dl|section|article|aside|figure|frame|container|variant|wrapper|content|group|stack|nav|main|header|footer|img|image|svg|icon|text|item|box|row|col|column|grid|flex|inner|outer|holder|block|elem|node)\d*$/i;
+  /^(div|el|span|p|a|ul|ol|li|dl|section|article|aside|figure|frame|container|variant|wrapper|content|group|stack|nav|main|header|footer|img|image|svg|icon|text|item|box|row|col|column|grid|flex|inner|outer|holder|block|elem|node|desktop|tablet|mobile|phone|breakpoint|desktopvariant|tabletvariant|mobilevariant|phonevariant)\d*$/i;
 
 /** Tag → suffix, so the generated name says what the node *is*. */
 const ROLE_SUFFIX: Record<string, string> = {

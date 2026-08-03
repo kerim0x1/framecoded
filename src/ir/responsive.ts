@@ -69,6 +69,114 @@ export function structuralKey(n: IRNode): string {
   }
 }
 
+const GENERIC_LAYER_NAME =
+  /^(?:div|el|span|frame|container|variant|wrapper|content|group|stack|box|row|col|column|inner|outer|holder|block|elem|node|section)$/i;
+const BREAKPOINT_NAME = /^(?:desktop|tablet|mobile|phone|breakpoint|wide|narrow|small|medium|large)$/i;
+const SIGNAL_STOP_WORDS = new Set([
+  "and", "are", "but", "for", "from", "has", "have", "into", "not", "that", "the", "this", "with", "you", "your",
+]);
+
+/** A designer-facing identity with generated suffixes and breakpoint labels removed. */
+function semanticName(node: IRNode): string {
+  const source = node.className ?? node.attrs["data-framer-name"] ?? "";
+  const tokens = source
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/\d+$/g, " ")
+    .split(/[^A-Za-z0-9]+/)
+    .map((token) => token.toLowerCase())
+    .filter((token) => token && !BREAKPOINT_NAME.test(token));
+  const name = tokens.join("");
+  return name && !GENERIC_LAYER_NAME.test(name) ? name : "";
+}
+
+/** Content survives even when Framer gives the breakpoint roots unrelated names. */
+function semanticSignals(node: IRNode, out = new Set<string>(), depth = 0): Set<string> {
+  if (depth > 9 || out.size >= 96) return out;
+
+  const addWords = (value: string | undefined, prefix = "w") => {
+    if (!value) return;
+    const words = value
+      .toLowerCase()
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length > 2 && !SIGNAL_STOP_WORDS.has(word));
+    for (const word of words) {
+      out.add(`${prefix}:${word}`);
+      if (out.size >= 96) break;
+    }
+    if (words.length > 1) out.add(`p:${words.slice(0, 8).join("-")}`);
+  };
+
+  if (node.kind === "text") addWords(node.text);
+  if (node.kind === "image") {
+    addWords(node.alt, "a");
+    const asset = node.src.split(/[?#]/, 1)[0]?.split("/").pop()?.toLowerCase();
+    if (asset) out.add(`i:${asset}`);
+  }
+  if ((node.kind === "element" || node.kind === "text") && node.href) {
+    out.add(`h:${node.href.replace(/[?#].*$/, "").toLowerCase()}`);
+  }
+  if (node.kind === "element") {
+    for (const child of node.children) semanticSignals(child, out, depth + 1);
+  }
+  return out;
+}
+
+function signalSimilarity(base: IRNode, variant: IRNode): number {
+  const left = semanticSignals(base);
+  const right = semanticSignals(variant);
+  if (!left.size || !right.size) return 0;
+  let shared = 0;
+  for (const signal of left) if (right.has(signal)) shared++;
+  return shared / Math.min(left.size, right.size);
+}
+
+function firstHeading(node: IRNode, depth = 0): string {
+  if (depth > 7) return "";
+  if (node.kind === "text" && /^h[1-6]$/.test(node.tag)) {
+    return node.text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+  }
+  if (node.kind === "element") {
+    for (const child of node.children) {
+      const heading = firstHeading(child, depth + 1);
+      if (heading) return heading;
+    }
+  }
+  return "";
+}
+
+/**
+ * Confidence that two sibling layers are the same semantic region at different widths.
+ * High-value human signals outweigh structural differences, while position and shape
+ * keep anonymous Framer scaffolding aligned around inserted mobile-only layers.
+ */
+function responsiveMatchScore(base: IRNode, variant: IRNode, baseIndex: number, variantIndex: number): number {
+  if (base.kind !== variant.kind) return Number.NEGATIVE_INFINITY;
+
+  let score = base.tag === variant.tag ? 18 : -12;
+  if (structuralKey(base) === structuralKey(variant)) score += 24;
+
+  const baseName = semanticName(base);
+  const variantName = semanticName(variant);
+  if (baseName && variantName) score += baseName === variantName ? 72 : -36;
+
+  const baseHeading = firstHeading(base);
+  const variantHeading = firstHeading(variant);
+  if (baseHeading && variantHeading) score += baseHeading === variantHeading ? 88 : -28;
+
+  const similarity = signalSimilarity(base, variant);
+  score += similarity * 92;
+  if (similarity === 0 && semanticSignals(base).size > 1 && semanticSignals(variant).size > 1) score -= 32;
+
+  if (base.kind === "image" && variant.kind === "image" && base.src === variant.src) score += 96;
+  if (base.kind === "element" && variant.kind === "element") {
+    const largest = Math.max(base.children.length, variant.children.length, 1);
+    score += (Math.min(base.children.length, variant.children.length) / largest) * 12;
+  }
+
+  score += Math.max(0, 12 - Math.abs(baseIndex - variantIndex) * 3);
+  return score;
+}
+
 export interface MergeResult {
   /** Subtrees whose layer structure didn't line up with the primary breakpoint. */
   structureMismatches: number;
@@ -178,14 +286,26 @@ function mergeChildren(base: IRElement, variant: IRElement, media: string, resul
   const usedVariant = new Set<number>();
   const matchedBase = new Set<number>();
 
+  // A section may have a different child count at each Framer breakpoint while still
+  // being the same About, Hero, Pricing, or Navigation component. Match the strongest
+  // semantic pairs globally instead of accepting the first generic `div:N` shape.
+  const candidates: Array<{ bi: number; vi: number; score: number }> = [];
   bc.forEach((b, bi) => {
-    const key = structuralKey(b);
-    const vi = vc.findIndex((v, i) => !usedVariant.has(i) && structuralKey(v) === key);
-    if (vi === -1) return;
-    usedVariant.add(vi);
-    matchedBase.add(bi);
-    mergeNode(b, vc[vi]!, media, result);
+    vc.forEach((v, vi) => {
+      const score = responsiveMatchScore(b, v, bi, vi);
+      if (score >= 45) candidates.push({ bi, vi, score });
+    });
   });
+  candidates.sort(
+    (a, b) => b.score - a.score || Math.abs(a.bi - a.vi) - Math.abs(b.bi - b.vi) || a.bi - b.bi,
+  );
+
+  for (const candidate of candidates) {
+    if (matchedBase.has(candidate.bi) || usedVariant.has(candidate.vi)) continue;
+    matchedBase.add(candidate.bi);
+    usedVariant.add(candidate.vi);
+    mergeNode(bc[candidate.bi]!, vc[candidate.vi]!, media, result);
+  }
 
   // Present in the primary but not at this width — hide it here.
   bc.forEach((b, bi) => {

@@ -1,3 +1,4 @@
+import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { IRSite } from "../ir/types.js";
 import { writeFileEnsured, ensureDir } from "../util/fs.js";
@@ -27,6 +28,14 @@ export interface GenerateResult {
 export async function generateProject(site: IRSite, options: GenerateOptions): Promise<GenerateResult> {
   const { outDir } = options;
   const publicDir = join(outDir, "public");
+
+  // Exports are reproducible snapshots. Keeping an older generated tree here leaves
+  // stale routes, assets, and component folders behind when the new export contains
+  // fewer pages or uses a stricter component planner. Only Framecoded-owned trees are
+  // reset; repository metadata and unrelated top-level files remain untouched.
+  await Promise.all(
+    [join(outDir, "src"), publicDir].map((dir) => rm(dir, { recursive: true, force: true })),
+  );
 
   // 1. Enrich the IR (perf + a11y) — before any asset download, since downloads mutate the IR.
   const enrich = enrichSite(site);

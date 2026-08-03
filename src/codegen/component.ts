@@ -28,7 +28,7 @@ export interface SplitOptions {
   maxComponents: number;
 }
 
-const DEFAULT_SPLIT: SplitOptions = { threshold: 14, namedThreshold: 5, maxComponents: 160 };
+const DEFAULT_SPLIT: SplitOptions = { threshold: 24, namedThreshold: 12, maxComponents: 48 };
 
 export function subtreeSize(node: IRNode): number {
   let n = 1;
@@ -42,7 +42,9 @@ function subtreeHasAnimations(node: IRNode): boolean {
 }
 
 const GENERIC_COMPONENT_NAME =
-  /^(?:div|el|span|frame|container|variant|wrapper|content|group|stack|box|row|col|column|inner|outer|holder|block|elem|node)\d*$/i;
+  /^(?:div|el|span|frame|container|variant|wrapper|content|group|stack|box|row|col|column|inner|outer|holder|block|elem|node|desktop|tablet|mobile|phone|breakpoint|desktopvariant|tabletvariant|mobilevariant|phonevariant)\d*$/i;
+
+const SEMANTIC_REGION_TAGS = new Set(["section", "header", "nav", "footer", "aside"]);
 
 /** A useful Framer/semantic layer name, rather than generated DOM scaffolding. */
 function isNamedBoundary(node: IRNode): boolean {
@@ -149,27 +151,35 @@ export function planComponents(page: IRPage, options: Partial<SplitOptions> = {}
     }
   }
 
-  // BFS over component roots. Large layout regions and smaller, explicitly named
-  // Framer groups both become files; anonymous pass-through scaffolding stays inline.
-  const queue: IRNode[] = [page.root];
+  // Split only at real page regions. Recursively splitting every named Framer layer
+  // creates wrapper chains such as Section -> Content -> Content2 -> Title and can
+  // easily produce hundreds of files without making the output more maintainable.
+  // A sole root child is the page shell rather than a useful component boundary.
+  const pageShellId =
+    page.root.kind === "element" && page.root.children.length === 1
+      ? page.root.children[0]?.id
+      : undefined;
   let idx = 0;
-  while (queue.length) {
-    const compRoot = queue.shift()!;
-    extractChildren(compRoot);
-  }
+  extractChildren(page.root);
 
   function extractChildren(node: IRNode) {
     if (node.kind !== "element") return;
     for (const child of node.children) {
       if (components.length >= opts.maxComponents) return;
       if (boundaries.has(child.id)) continue;
-      if (shouldExtract(child, opts) && !isPassThrough(child, opts)) {
+      const semanticRegion =
+        child.kind === "element" && SEMANTIC_REGION_TAGS.has(child.tag.toLowerCase());
+      if (
+        semanticRegion &&
+        child.id !== pageShellId &&
+        shouldExtract(child, opts) &&
+        !isPassThrough(child, opts)
+      ) {
         const name = nameFor(child, ++idx);
         boundaries.set(child.id, name);
         components.push({ name, root: child });
-        queue.push(child);
       } else {
-        // small child: keep inline, but still look deeper for extractable sections
+        // Keep layout scaffolding inline while searching for the next real region.
         extractChildren(child);
       }
     }

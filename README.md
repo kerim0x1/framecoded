@@ -4,11 +4,11 @@
 
 ### Escape the canvas.<br />Keep the craft.
 
-Export published Framer websites into clean, editable **Next.js** projects with
-responsive layouts, local assets, SEO and Motion animations included. TanStack
-Start and Astro are supported too.
+Export published Framer websites into clean, modular and editable **Next.js**
+projects with responsive layouts, local assets, SEO and Motion animations
+included. TanStack Start and Astro are supported too.
 
-[![Version](https://img.shields.io/badge/version-0.1.0-111111?style=flat-square)](./package.json)
+[![Version](https://img.shields.io/npm/v/framecoded?style=flat-square&color=111111)](https://www.npmjs.com/package/framecoded)
 [![Node](https://img.shields.io/badge/Node.js-20%2B-43853d?style=flat-square)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-ready-3178c6?style=flat-square)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-f05a47?style=flat-square)](#license)
@@ -55,7 +55,7 @@ on the original Framer deployment.
 | | Capability | Result |
 |---|---|---|
 | **01** | Responsive capture | Layouts are inspected across desktop, tablet and mobile viewports. |
-| **02** | Modular components | Reusable sections are emitted as readable React components instead of one giant page file. |
+| **02** | Clean modular components | Every route is split into semantic React sections while internal Framer wrappers stay inline. |
 | **03** | Local assets | Images, fonts and other discovered assets are collected into the generated project. |
 | **04** | Motion support | Supported Framer transitions and interactions are preserved with web-native animation output. |
 | **05** | Multi-page export | Linked pages can be crawled and generated as framework-native routes. |
@@ -81,6 +81,18 @@ npx framecoded export https://example.framer.website/
 ```bash
 npm install --global framecoded
 framecoded export https://example.framer.website/
+```
+
+### Update an existing installation
+
+```bash
+npm install --global framecoded@latest
+```
+
+You can always run the newest release without a global installation:
+
+```bash
+npx framecoded@latest export https://example.framer.website/
 ```
 
 The default target is Next.js. Choose another framework with
@@ -208,6 +220,13 @@ Generated projects are organized around routes, reusable components, scoped
 styles and local assets. Exact folders vary by framework, but the result is
 normal application code intended to be changed after export.
 
+Each exported route receives its own component namespace at
+`src/components/<PageName>/`. Framecoded extracts meaningful page regions such
+as `Nav`, `HeroSection`, `PricingSection`, `FaqSection` and `Footer`, while
+keeping implementation wrappers inside their owning section. Re-running an
+export resets the generated `src` and `public` trees first, so components and
+assets from an older export cannot remain in the project.
+
 ## CLI reference
 
 ```text
@@ -259,20 +278,22 @@ before npm packages or publishes a release.
 ## A note about generated components
 
 > [!NOTE]
-> The generated component folder can currently look a little messy. You may see
-> many components with identical or similarly suffixed names. This is expected
-> and does not mean the export failed.
+> Framer can render separate DOM trees for Desktop, Tablet and Mobile. Framecoded
+> detects matching breakpoint trees and folds them into one semantic component.
+> Ambiguous variants are deliberately kept separate rather than risking a broken
+> responsive layout.
 
-Framer can render a separate version of the same component for every breakpoint
-created on the canvas. A component designed for Desktop, Tablet and Mobile may
-therefore appear two or three times in the rendered website. Framecoded
-currently prioritizes visual fidelity and preserves those variants instead of
-merging them too aggressively and potentially breaking the responsive layout.
+The same modular planner runs independently for every crawled page. It keeps the
+page root readable, extracts only genuine semantic regions and avoids nested
+wrapper chains such as `Section -> Content -> Content2 -> Title`. Desktop,
+Tablet and Mobile styling remains inside the resulting component through scoped
+media queries instead of producing separate breakpoint component folders.
 
-A new component merge pass is in development. It will identify equivalent
-breakpoint variants and combine them into cleaner, reusable components without
-changing how the exported website looks. Until that update lands, do not be
-surprised when a complex Framer project produces a large number of components.
+The responsive merge pass compares Framer names, headings, text and asset
+signals, element structure and sibling position. Confident matches become one
+React component with media-query overrides, so an About section can remain
+`AboutUsSection` across every breakpoint. When two variants cannot be matched
+safely, Framecoded still prioritizes visual fidelity and preserves both branches.
 
 Animations are generated with [Motion](https://motion.dev/), the same animation
 library used by Framer. This keeps supported transitions and interactions close
