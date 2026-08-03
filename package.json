@@ -1,0 +1,69 @@
+{
+  "name": "framecoded",
+  "version": "0.1.0",
+  "description": "CLI that converts published Framer websites into clean, editable Next.js, TanStack Start, or Astro projects.",
+  "author": {
+    "name": "kerim0x1",
+    "url": "https://kerim0x1.com"
+  },
+  "homepage": "https://kerim0x1.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kerim0x1/framecoded.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kerim0x1/framecoded/issues"
+  },
+  "type": "module",
+  "bin": {
+    "framecoded": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "prepack": "npm run typecheck && npm run build",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/cli.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "framer",
+    "react",
+    "nextjs",
+    "tanstack",
+    "astro",
+    "codegen",
+    "export",
+    "cli",
+    "seo",
+    "motion",
+    "website-migration"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^12.1.0",
+    "node-html-parser": "^6.1.13",
+    "picocolors": "^1.1.1",
+    "playwright-core": "^1.62.1",
+    "postcss": "^8.4.49",
+    "prettier": "^3.3.3"
+  },
+  "optionalDependencies": {
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3"
+  }
+}
