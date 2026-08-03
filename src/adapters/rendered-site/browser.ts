@@ -2472,6 +2472,24 @@ export interface CaptureOptions {
   onProgress?: (message: string) => void;
 }
 
+const activeBrowsers = new Set<Browser>();
+
+/** Close every browser owned by the renderer, including browsers interrupted by the CLI. */
+export async function closeActiveBrowsers(): Promise<void> {
+  const browsers = [...activeBrowsers];
+  await Promise.all(
+    browsers.map(async (browser) => {
+      try {
+        await browser.close();
+      } catch {
+        // A crashed or already closed browser is clean from the process perspective.
+      } finally {
+        activeBrowsers.delete(browser);
+      }
+    }),
+  );
+}
+
 /** Open a browser, hand it to `fn`, and always close it again. */
 export async function withBrowser<T>(fn: (browser: Browser) => Promise<T>): Promise<T> {
   let browser: Browser;
@@ -2487,10 +2505,17 @@ export async function withBrowser<T>(fn: (browser: Browser) => Promise<T>): Prom
       );
     }
   }
+  activeBrowsers.add(browser);
   try {
     return await fn(browser);
   } finally {
-    await browser.close();
+    try {
+      await browser.close();
+    } catch {
+      // Shutdown may already have closed the browser after SIGINT or SIGTERM.
+    } finally {
+      activeBrowsers.delete(browser);
+    }
   }
 }
 

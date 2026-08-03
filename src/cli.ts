@@ -4,6 +4,7 @@ import pc from "picocolors";
 import { setVerbose, log, type ProgressReporter } from "./util/log.js";
 import { ingestPublishedSite } from "./adapters/published-site/index.js";
 import { ingestRenderedSite } from "./adapters/rendered-site/index.js";
+import { closeActiveBrowsers } from "./adapters/rendered-site/browser.js";
 import { ingestFramerMcpFile } from "./adapters/framer-mcp/index.js";
 import { generateProject } from "./codegen/project.js";
 import type { IRSite } from "./ir/types.js";
@@ -12,14 +13,31 @@ import { dirSize } from "./util/fs.js";
 const program = new Command();
 let activeProgress: ProgressReporter | undefined;
 let interrupting = false;
+let shutdownExitCode = 130;
+let shutdownPromise: Promise<never> | undefined;
 
-process.on("SIGINT", () => {
-  if (interrupting) process.exit(130);
+function gracefulShutdown(exitCode: number): Promise<never> {
+  if (!shutdownPromise) {
+    shutdownPromise = (async () => {
+      await closeActiveBrowsers();
+      process.exit(exitCode);
+    })();
+  }
+  return shutdownPromise;
+}
+
+function handleTerminationSignal(signal: "SIGINT" | "SIGTERM"): void {
+  const exitCode = signal === "SIGTERM" ? 143 : 130;
+  if (interrupting) process.exit(exitCode);
   interrupting = true;
-  if (activeProgress) activeProgress.fail("Export cancelled by user");
-  else log.warn("Export cancelled by user");
-  process.exit(130);
-});
+  shutdownExitCode = exitCode;
+  if (activeProgress) activeProgress.fail("Export cancelled by user - closing browser");
+  else log.warn("Export cancelled by user - closing browser");
+  void gracefulShutdown(exitCode);
+}
+
+process.on("SIGINT", () => handleTerminationSignal("SIGINT"));
+process.on("SIGTERM", () => handleTerminationSignal("SIGTERM"));
 
 program
   .name("framecoded")
@@ -73,6 +91,7 @@ program
       await run(site, { ...opts, framework }, progress);
       activeProgress = undefined;
     } catch (err) {
+      if (interrupting) await gracefulShutdown(shutdownExitCode);
       fail(err, progress);
     }
   });
@@ -100,6 +119,7 @@ program
       await run(site, { ...opts, framework }, progress);
       activeProgress = undefined;
     } catch (err) {
+      if (interrupting) await gracefulShutdown(shutdownExitCode);
       fail(err, progress);
     }
   });
@@ -183,4 +203,7 @@ function fail(err: unknown, progress?: ProgressReporter): never {
   process.exit(1);
 }
 
-program.parseAsync().catch(fail);
+program.parseAsync().catch(async (err) => {
+  if (interrupting) await gracefulShutdown(shutdownExitCode);
+  fail(err);
+});
