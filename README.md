@@ -14,23 +14,11 @@ included. TanStack Start and Astro are supported too.
 [![License](https://img.shields.io/badge/license-MIT-f05a47?style=flat-square)](#license)
 [![Creator](https://img.shields.io/badge/creator-kerim0x1-111111?style=flat-square)](https://kerim0x1.com)
 
-[Watch video](#video) | [Quick start](#quick-start) | [How it works](#how-it-works) | [CLI](#cli-reference)
+[Quick start](#quick-start) | [How it works](#how-it-works) | [CLI](#cli-reference)
 
 </div>
 
 ---
-
-## Video
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=ykRd-C1uWo8">
-    <img src="https://img.youtube.com/vi/ykRd-C1uWo8/maxresdefault.jpg" alt="Watch Framecoded on YouTube" width="640" />
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=ykRd-C1uWo8"><strong>Watch Framecoded on YouTube</strong></a>
-</p>
 
 ## Why Framecoded?
 
